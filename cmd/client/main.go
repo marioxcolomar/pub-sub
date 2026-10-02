@@ -26,19 +26,19 @@ func main() {
 	username, err := gamelogic.ClientWelcome()
 	failOnError(err, "Client failed in welcome message")
 
-	_, queue, err := pubsub.DeclareAndBind(
+	gameState := gamelogic.NewGameState(username)
+
+	err = pubsub.SubscribeJSON(
 		conn,
 		routing.ExchangePerilDirect,
-		routing.PauseKey+"."+username,
+		routing.PauseKey+"."+gameState.GetUsername(),
 		routing.PauseKey,
 		pubsub.Transient,
+		handlerPause(gameState),
 	)
 	if err != nil {
 		log.Fatalf("Could not subscrive to pause: %v", err)
 	}
-	fmt.Printf("Queue %v declared and bound! \n", queue.Name)
-
-	gameState := gamelogic.NewGameState(username)
 
 	for {
 		input := gamelogic.GetInput()
@@ -47,7 +47,7 @@ func main() {
 		}
 		switch input[0] {
 		case "spawn":
-			err := gameState.CommandSpawn(input)
+			err = gameState.CommandSpawn(input)
 			if err != nil {
 				fmt.Println(err)
 				continue
@@ -73,7 +73,6 @@ func main() {
 			fmt.Println("Unknown command")
 		}
 	}
-
 }
 
 func failOnError(err error, msg string) {
