@@ -13,13 +13,12 @@ import (
 func main() {
 	fmt.Println("Starting Peril server...")
 
-	gamelogic.PrintServerHelp()
-
 	conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
 	failOnError(err, "Failed to connect to RabbitMQ")
 
 	fmt.Println("Connection to amqp successfull")
 	defer conn.Close()
+	fmt.Println("Peril game server connected to RabbitMQ!")
 
 	ch, err := conn.Channel()
 	failOnError(err, "Failed to open a channel")
@@ -36,6 +35,8 @@ func main() {
 		log.Fatalf("Could not subscrive to pause: %v", err)
 	}
 	fmt.Printf("Queue %v declared and bound! \n", queue.Name)
+
+	gamelogic.PrintServerHelp()
 
 	for {
 		input := gamelogic.GetInput()
