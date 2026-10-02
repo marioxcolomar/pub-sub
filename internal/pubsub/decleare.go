@@ -1,6 +1,7 @@
 package pubsub
 
 import (
+	"fmt"
 	"log"
 
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -13,10 +14,17 @@ const (
 	Transient QueueDuration = "transient"
 )
 
-func DeclareAndBind(conn *amqp.Connection, exchange, queueName, key string, queueType QueueDuration) (*amqp.Channel, amqp.Queue, error) {
+func DeclareAndBind(
+	conn *amqp.Connection,
+	exchange,
+	queueName,
+	key string,
+	queueType QueueDuration,
+) (*amqp.Channel, amqp.Queue, error) {
 	ch, err := conn.Channel()
-	failOnError(err, "Failed to open a channel")
-	defer ch.Close()
+	if err != nil {
+		return nil, amqp.Queue{}, fmt.Errorf("Could not create channel: %v", err)
+	}
 
 	durable := queueType == Durable
 	autoDelete := queueType == Transient
@@ -25,9 +33,11 @@ func DeclareAndBind(conn *amqp.Connection, exchange, queueName, key string, queu
 
 	queue, err := ch.QueueDeclare(queueName, durable, autoDelete, exclusive, noWait, nil)
 	if err != nil {
-		return ch, amqp.Queue{}, err
+		return nil, amqp.Queue{}, fmt.Errorf("Could not declare queue: %v", err)
 	}
-	ch.QueueBind(queue.Name, key, exchange, noWait, nil)
+	err = ch.QueueBind(queue.Name, key, exchange, noWait, nil)
+	failOnError(err, "Could not bind queue: ")
+
 	return ch, queue, nil
 }
 
