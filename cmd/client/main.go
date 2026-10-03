@@ -40,6 +40,15 @@ func main() {
 		log.Fatalf("Could not subscrive to pause: %v", err)
 	}
 
+	err = pubsub.SubscribeJSON(
+		conn,
+		routing.ExchangePerilTopic,
+		routing.ArmyMovesPrefix+"."+gameState.GetUsername(),
+		routing.ArmyMovesPrefix+".*",
+		pubsub.Transient,
+		handlerMove(gameState),
+	)
+
 	for {
 		input := gamelogic.GetInput()
 		if input == nil {
@@ -58,7 +67,17 @@ func main() {
 				fmt.Println(err)
 				continue
 			}
-			fmt.Printf("Your move was successful: %#v", move)
+			err = pubsub.PublishJSON(
+				ch,
+				routing.ExchangePerilTopic,
+				routing.ArmyMovesPrefix+gameState.GetUsername(),
+				move,
+			)
+			if err != nil {
+				fmt.Println(err)
+				continue
+			}
+			fmt.Printf("Your move was successful and published: %#v", move)
 		case "status":
 			gameState.CommandStatus()
 		case "help":
