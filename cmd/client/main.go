@@ -14,20 +14,38 @@ func main() {
 	fmt.Println("Starting Peril client...")
 
 	conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
-	failOnError(err, "Failed to connect to RabbitMQ")
-
-	fmt.Println("Connection to amqp successfull")
+	if err != nil {
+		log.Fatalf("Could not connect to RabbitMQ: %v", err)
+	}
 	defer conn.Close()
+	fmt.Println("Connection to amqp successfull!")
 
 	ch, err := conn.Channel()
-	failOnError(err, "Failed to open a channel")
-	defer ch.Close()
+	if err != nil {
+		log.Fatalf("Could not create channel: %v", err)
+	}
 
 	username, err := gamelogic.ClientWelcome()
-	failOnError(err, "Client failed in welcome message")
+	if err != nil {
+		log.Fatalf("Client failed to get username: %v", err)
+	}
 
 	gameState := gamelogic.NewGameState(username)
 
+	// Subscribe to army moves
+	err = pubsub.SubscribeJSON(
+		conn,
+		routing.ExchangePerilTopic,
+		routing.ArmyMovesPrefix+"."+gameState.GetUsername(),
+		routing.ArmyMovesPrefix+".*",
+		pubsub.Transient,
+		handlerMove(gameState),
+	)
+	if err != nil {
+		log.Fatalf("Could not subscribe to army moves: %v", err)
+	}
+
+	// Subscribe to pause
 	err = pubsub.SubscribeJSON(
 		conn,
 		routing.ExchangePerilDirect,
@@ -37,21 +55,12 @@ func main() {
 		handlerPause(gameState),
 	)
 	if err != nil {
-		log.Fatalf("Could not subscrive to pause: %v", err)
+		log.Fatalf("Could not subscribe to pause: %v", err)
 	}
-
-	err = pubsub.SubscribeJSON(
-		conn,
-		routing.ExchangePerilTopic,
-		routing.ArmyMovesPrefix+"."+gameState.GetUsername(),
-		routing.ArmyMovesPrefix+".*",
-		pubsub.Transient,
-		handlerMove(gameState),
-	)
 
 	for {
 		input := gamelogic.GetInput()
-		if input == nil {
+		if len(input) == 0 {
 			continue
 		}
 		switch input[0] {
@@ -70,14 +79,14 @@ func main() {
 			err = pubsub.PublishJSON(
 				ch,
 				routing.ExchangePerilTopic,
-				routing.ArmyMovesPrefix+gameState.GetUsername(),
+				routing.ArmyMovesPrefix+"."+move.Player.Username,
 				move,
 			)
 			if err != nil {
-				fmt.Println(err)
+				fmt.Printf("Errors: %s\n", err)
 				continue
 			}
-			fmt.Printf("Your move was successful and published: %#v", move)
+			fmt.Printf("You moved %v units to %s\n", len(move.Units), move.ToLocation)
 		case "status":
 			gameState.CommandStatus()
 		case "help":
@@ -91,11 +100,5 @@ func main() {
 		default:
 			fmt.Println("Unknown command")
 		}
-	}
-}
-
-func failOnError(err error, msg string) {
-	if err != nil {
-		log.Panicf("%s: %s", msg, err)
 	}
 }

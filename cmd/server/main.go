@@ -14,14 +14,18 @@ func main() {
 	fmt.Println("Starting Peril server...")
 
 	conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
-	failOnError(err, "Failed to connect to RabbitMQ")
+	if err != nil {
+		log.Fatalf("Failed to connect to RabbitMQ: %v", err)
+	}
 
 	fmt.Println("Connection to amqp successfull")
 	defer conn.Close()
 	fmt.Println("Peril game server connected to RabbitMQ!")
 
 	ch, err := conn.Channel()
-	failOnError(err, "Failed to open a channel")
+	if err != nil {
+		log.Fatalf("Failed to open a channel: %v", err)
+	}
 	defer ch.Close()
 
 	_, queue, err := pubsub.DeclareAndBind(
@@ -80,11 +84,5 @@ func main() {
 			// Message is not known
 			fmt.Println("Unknown command")
 		}
-	}
-}
-
-func failOnError(err error, msg string) {
-	if err != nil {
-		log.Panicf("%s: %s", msg, err)
 	}
 }
