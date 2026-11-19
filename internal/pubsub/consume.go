@@ -1,9 +1,10 @@
 package pubsub
 
 import (
+	"bytes"
+	"encoding/gob"
 	"encoding/json"
 	"fmt"
-	"log"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 )
@@ -24,38 +25,90 @@ func SubscribeJSON[T any](
 	queueType QueueDuration,
 	handler func(T) AckType,
 ) error {
+	return subscribe[T](
+		conn,
+		exchange,
+		queueName,
+		key,
+		queueType,
+		handler,
+		func(data []byte) (T, error) {
+			var target T
+			err := json.Unmarshal(data, &target)
+			return target, err
+		},
+	)
+}
+
+func SubscribeGob[T any](
+	conn *amqp.Connection,
+	exchange,
+	queueName,
+	key string,
+	queueType QueueDuration,
+	handler func(T) AckType,
+) error {
+	return subscribe[T](
+		conn,
+		exchange,
+		queueName,
+		key,
+		queueType,
+		handler,
+		func(data []byte) (T, error) {
+			buffer := bytes.NewBuffer(data)
+			decoder := gob.NewDecoder(buffer)
+			var target T
+			err := decoder.Decode(&target)
+			return target, err
+		},
+	)
+}
+
+func subscribe[T any](
+	conn *amqp.Connection,
+	exchange,
+	queueName,
+	key string,
+	queueType QueueDuration,
+	handler func(T) AckType,
+	unmarshaller func([]byte) (T, error),
+) error {
 	ch, queue, err := DeclareAndBind(conn, exchange, queueName, key, queueType)
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("Could not declare and bind queue: %v", err)
 	}
 
-	messages, err := ch.Consume(queue.Name, "", false, false, false, false, nil)
+	messages, err := ch.Consume(
+		queue.Name, // queue
+		"",         // consumer
+		false,      // auto-ack
+		false,      // exclusive
+		false,      // no-local
+		false,      // no-wait
+		nil,        // args
+	)
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("Could not consume messages: %v", err)
 	}
 
-	unmarshaller := func(data []byte) (T, error) {
-		var target T
-		err := json.Unmarshal(data, &target)
-		return target, err
-	}
 	go func() {
 		defer ch.Close()
+
 		for message := range messages {
 			target, err := unmarshaller(message.Body)
 			if err != nil {
-				fmt.Printf("Could not unmarshal message: %v\n", err)
+				fmt.Printf("Could not decode the message: %s", err)
 				continue
 			}
+
 			switch handler(target) {
 			case Ack:
 				message.Ack(false)
-
-			case NackRequeue:
-				message.Nack(false, true)
-
 			case NackDiscard:
 				message.Nack(false, false)
+			case NackRequeue:
+				message.Nack(false, true)
 			}
 		}
 	}()
