@@ -28,17 +28,17 @@ func main() {
 	}
 	defer ch.Close()
 
-	_, queue, err := pubsub.DeclareAndBind(
+	err = pubsub.SubscribeGob(
 		conn,
 		routing.ExchangePerilTopic,
 		routing.GameLogSlug,
 		routing.GameLogSlug+".*",
 		pubsub.Durable,
+		handlerLogs(),
 	)
 	if err != nil {
-		log.Fatalf("Could not subscrive to pause: %v", err)
+		log.Fatalf("Could not start consuming logs: %v", err)
 	}
-	fmt.Printf("Queue %v declared and bound! \n", queue.Name)
 
 	gamelogic.PrintServerHelp()
 
