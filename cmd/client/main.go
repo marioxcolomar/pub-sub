@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"time"
 
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/gamelogic"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/pubsub"
@@ -106,24 +107,23 @@ func main() {
 		case "help":
 			gamelogic.PrintClientHelp()
 		case "spam":
-			if len(input) == 1 {
-				fmt.Println("Spamming command missing")
+			if len(input) < 2 {
+				fmt.Println("Missing spam count: spam <n>")
+				continue
 			}
-			c := input[1]
-			t, err := strconv.Atoi(c)
+			t, err := strconv.Atoi(input[1])
 			if err != nil {
-				fmt.Println("Unable to read spam option")
+				fmt.Printf("Unable to read spam option %v\n", err)
+				continue
 			}
-			for i := range t {
-				fmt.Printf("Handling malicious log %v for username %v\n", i, username)
+			for i := 0; i < t; i++ {
 				lg := gamelogic.GetMaliciousLog()
-				pubsub.PublishJSON(
-					ch,
-					routing.ExchangePerilTopic,
-					routing.GameLogSlug+"."+username,
-					lg,
-				)
+				err = publishLog(ch, username, lg)
+				if err != nil {
+					fmt.Printf("Error publishing malicious log: %s\n", err)
+				}
 			}
+			fmt.Printf("Handled malicious log(s) %v\n", t)
 		case "quit":
 			gamelogic.PrintQuit()
 			return
@@ -132,4 +132,17 @@ func main() {
 			fmt.Println("Unknown command")
 		}
 	}
+}
+
+func publishLog(ch *amqp.Channel, username, log string) error {
+	return pubsub.PublishGob(
+		ch,
+		routing.ExchangePerilTopic,
+		routing.GameLogSlug+"."+username,
+		routing.GameLog{
+			Username:    username,
+			CurrentTime: time.Now(),
+			Message:     log,
+		},
+	)
 }
