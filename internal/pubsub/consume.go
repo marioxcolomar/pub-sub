@@ -79,6 +79,12 @@ func subscribe[T any](
 		return fmt.Errorf("Could not declare and bind queue: %v", err)
 	}
 
+	// Set prefetch
+	err = ch.Qos(10, 0, false)
+	if err != nil {
+		return fmt.Errorf("Could not set prefetch: %v", err)
+	}
+
 	messages, err := ch.Consume(
 		queue.Name, // queue
 		"",         // consumer
