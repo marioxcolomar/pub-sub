@@ -44,7 +44,7 @@ func main() {
 
 	for {
 		input := gamelogic.GetInput()
-		if input == nil {
+		if len(input) == 0 {
 			continue
 		}
 		switch input[0] {
