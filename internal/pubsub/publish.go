@@ -40,7 +40,7 @@ func PublishGob[T any](ch *amqp.Channel, exchange, key string, val T) error {
 		false,
 		false,
 		amqp.Publishing{
-			ContentType: "applicaiton/gob",
+			ContentType: "application/gob",
 			Body:        buffer.Bytes(),
 		})
 }
